@@ -85,6 +85,12 @@ export const createOptions = z.object({
       'Use test mode (creates testmode credentials from test card data)',
     ),
   approve: z.boolean().default(false).describe(''),
+  useApprovalPolicy: z
+    .boolean()
+    .default(false)
+    .describe(
+      'Use approval policy through the delegated approval flow (beta, available only to select OAuth clients)',
+    ),
   outputFile: z
     .string()
     .optional()
@@ -194,4 +200,10 @@ export const updateOptions = z.object({
     .boolean()
     .default(false)
     .describe('Use the delegated approval flow for this update'),
+  useApprovalPolicy: z
+    .boolean()
+    .default(false)
+    .describe(
+      'Use approval policy through the delegated approval flow (beta, available only to select OAuth clients)',
+    ),
 });

@@ -482,6 +482,8 @@ describe('production mode', { timeout: CLI_TIMEOUT_MS + 5_000 }, () => {
         '550e8400-e29b-41d4-a716-446655440000',
       );
       expect(sentBody.amount).toBe(5000);
+      expect(sentBody.approve).toBeUndefined();
+      expect(sentBody.use_approval_policy).toBeUndefined();
       expect(sentBody).not.toHaveProperty('currency');
       expect(sentBody.merchant_name).toBe('Test Merchant');
       expect(sentBody.line_items).toEqual([
@@ -571,13 +573,16 @@ describe('production mode', { timeout: CLI_TIMEOUT_MS + 5_000 }, () => {
     });
 
     it.each([
-      { explicitCard: false, approve: false },
-      { explicitCard: true, approve: false },
-      { explicitCard: false, approve: true },
-      { explicitCard: true, approve: true },
+      { explicitCard: false, approve: false, useApprovalPolicy: false },
+      { explicitCard: true, approve: false, useApprovalPolicy: false },
+      { explicitCard: false, approve: true, useApprovalPolicy: false },
+      { explicitCard: true, approve: true, useApprovalPolicy: false },
+      { explicitCard: false, approve: false, useApprovalPolicy: true },
+      { explicitCard: true, approve: false, useApprovalPolicy: true },
+      { explicitCard: true, approve: true, useApprovalPolicy: true },
     ])(
-      'sends network_id for card creation with explicitCard=$explicitCard, approve=$approve',
-      async ({ explicitCard, approve }) => {
+      'sends card creation with explicitCard=$explicitCard, approve=$approve, useApprovalPolicy=$useApprovalPolicy',
+      async ({ explicitCard, approve, useApprovalPolicy }) => {
         const result = await runProdCli(
           'spend-request',
           'create',
@@ -593,6 +598,7 @@ describe('production mode', { timeout: CLI_TIMEOUT_MS + 5_000 }, () => {
           'net_prod_abc',
           ...(explicitCard ? ['--credential-type', 'card'] : []),
           ...(approve ? ['--approve'] : []),
+          ...(useApprovalPolicy ? ['--use-approval-policy'] : []),
           '--no-request-approval',
           '--json',
         );
@@ -600,9 +606,16 @@ describe('production mode', { timeout: CLI_TIMEOUT_MS + 5_000 }, () => {
         expect(result.exitCode).toBe(0);
         expect(lastRequest.method).toBe('POST');
         expect(lastRequest.url).toBe(
-          approve ? '/spend_requests/create_delegated' : '/spend_requests',
+          approve || useApprovalPolicy
+            ? '/spend_requests/create_delegated'
+            : '/spend_requests',
         );
-        expect(JSON.parse(lastRequest.body)).toMatchObject({
+        const sentBody = JSON.parse(lastRequest.body);
+        expect(sentBody.approve).toBeUndefined();
+        expect(sentBody.use_approval_policy).toBe(
+          useApprovalPolicy ? true : undefined,
+        );
+        expect(sentBody).toMatchObject({
           credential_type: 'card',
           network_id: 'net_prod_abc',
           merchant_name: 'Test Merchant',
@@ -706,7 +719,19 @@ describe('production mode', { timeout: CLI_TIMEOUT_MS + 5_000 }, () => {
       );
     });
 
-    it('creates a delegated Link Pay Token spend request via create_delegated', async () => {
+    it.each([
+      { approvalFlags: ['--approve'], useApprovalPolicy: false },
+      { approvalFlags: ['--use-approval-policy'], useApprovalPolicy: true },
+      {
+        approvalFlags: ['--approve', '--use-approval-policy'],
+        useApprovalPolicy: true,
+      },
+      {
+        approvalFlags: ['--approve', '--no-use-approval-policy'],
+        useApprovalPolicy: false,
+      },
+    ])('creates delegated LPT with $approvalFlags', async (approvalCase) => {
+      const { approvalFlags, useApprovalPolicy } = approvalCase;
       setNextResponse(200, {
         ...BASE_REQUEST,
         status: 'approved',
@@ -731,7 +756,7 @@ describe('production mode', { timeout: CLI_TIMEOUT_MS + 5_000 }, () => {
         VALID_CONTEXT,
         '--amount',
         '3500',
-        '--approve',
+        ...approvalFlags,
         '--no-request-approval',
         '--json',
       );
@@ -748,6 +773,9 @@ describe('production mode', { timeout: CLI_TIMEOUT_MS + 5_000 }, () => {
         merchant_account_id: 'acct_lpt_target',
       });
       expect(sentBody.approve).toBeUndefined();
+      expect(sentBody.use_approval_policy).toBe(
+        useApprovalPolicy ? true : undefined,
+      );
       expect(sentBody.request_approval).toBeUndefined();
       expect(sentBody.merchant_name).toBeUndefined();
       expect(sentBody.merchant_url).toBeUndefined();
@@ -759,30 +787,33 @@ describe('production mode', { timeout: CLI_TIMEOUT_MS + 5_000 }, () => {
       expect(request.instruction).toBeUndefined();
     });
 
-    it('rejects delegated Link Pay Token approval without --no-request-approval', async () => {
-      const result = await runProdCli(
-        'spend-request',
-        'create',
-        '--payment-method-id',
-        'pd_prod_test',
-        '--credential-type',
-        'link_pay_token',
-        '--merchant-account-id',
-        'acct_lpt_target',
-        '--context',
-        VALID_CONTEXT,
-        '--amount',
-        '3500',
-        '--approve',
-        '--json',
-      );
+    it.each(['--approve', '--use-approval-policy'])(
+      'rejects delegated LPT with %s without --no-request-approval',
+      async (approvalFlag) => {
+        const result = await runProdCli(
+          'spend-request',
+          'create',
+          '--payment-method-id',
+          'pd_prod_test',
+          '--credential-type',
+          'link_pay_token',
+          '--merchant-account-id',
+          'acct_lpt_target',
+          '--context',
+          VALID_CONTEXT,
+          '--amount',
+          '3500',
+          approvalFlag,
+          '--json',
+        );
 
-      expect(result.exitCode).toBe(1);
-      expect(result.stdout + result.stderr).toContain(
-        '--approve with Link Pay Token requires --no-request-approval',
-      );
-      expect(requests).toHaveLength(0);
-    });
+        expect(result.exitCode).toBe(1);
+        expect(result.stdout + result.stderr).toContain(
+          `${approvalFlag} with Link Pay Token requires --no-request-approval`,
+        );
+        expect(requests).toHaveLength(0);
+      },
+    );
 
     const LPT_ARGS = [
       '--credential-type',
@@ -1322,7 +1353,19 @@ describe('production mode', { timeout: CLI_TIMEOUT_MS + 5_000 }, () => {
       expect(sentBody.merchant_url).toBe('https://updated.com');
     });
 
-    it('uses the delegated update endpoint when --approve is set', async () => {
+    it.each([
+      { approvalFlags: ['--approve'], useApprovalPolicy: false },
+      { approvalFlags: ['--use-approval-policy'], useApprovalPolicy: true },
+      {
+        approvalFlags: ['--approve', '--use-approval-policy'],
+        useApprovalPolicy: true,
+      },
+      {
+        approvalFlags: ['--approve', '--no-use-approval-policy'],
+        useApprovalPolicy: false,
+      },
+    ])('uses delegated update with $approvalFlags', async (approvalCase) => {
+      const { approvalFlags, useApprovalPolicy } = approvalCase;
       setNextResponse(200, {
         ...BASE_REQUEST,
         amount: 6000,
@@ -1335,7 +1378,7 @@ describe('production mode', { timeout: CLI_TIMEOUT_MS + 5_000 }, () => {
         'lsrq_prod_001',
         '--amount',
         '6000',
-        '--approve',
+        ...approvalFlags,
         '--json',
       );
 
@@ -1344,7 +1387,10 @@ describe('production mode', { timeout: CLI_TIMEOUT_MS + 5_000 }, () => {
       expect(lastRequest.url).toBe(
         '/spend_requests/lsrq_prod_001/update_delegated',
       );
-      expect(JSON.parse(lastRequest.body)).toEqual({ amount: 6000 });
+      expect(JSON.parse(lastRequest.body)).toEqual({
+        amount: 6000,
+        ...(useApprovalPolicy ? { use_approval_policy: true } : {}),
+      });
     });
 
     it('surfaces API errors for update', async () => {
