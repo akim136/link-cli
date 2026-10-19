@@ -56,7 +56,9 @@ export const createOptions = z
       .number()
       .int()
       .positive()
-      .describe('Amount in the currency’s minor units'),
+      .describe(
+        'Amount in the currency’s minor units. For recurring requests, the spending limit per period',
+      ),
     currency: z
       .string()
       .length(3)
@@ -141,15 +143,25 @@ export const createOptions = z
       .optional()
       .describe('Unix timestamp (seconds).'),
     recurringInterval: z
-      .enum(['day', 'week', 'month', 'year'])
+      .string()
+      .pipe(
+        z.enum(['hour', 'day', 'week', 'month', 'year'], {
+          error: 'Recurring interval must be day, week, month, or year.',
+        }),
+      )
+      .meta({ type: 'string', enum: ['day', 'week', 'month', 'year'] })
       .optional()
-      .describe('Recurring interval.'),
+      .describe(
+        'Reset the spending limit every day, week, month, or year. Omit for a one-time purchase',
+      ),
     recurringIntervalCount: z.coerce
       .number()
       .int()
       .positive()
       .optional()
-      .describe('Recurring interval count.'),
+      .describe(
+        'Number of intervals per recurring period (positive integer; defaults to 1). Requires --recurring-interval',
+      ),
   })
   .superRefine((value, ctx) => {
     const hasCallback = value.completionCallbackUrl !== undefined;

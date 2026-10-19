@@ -32,6 +32,7 @@ from .params import (
     ListBalancesParams,
     ListSourcesParams,
     ListTransactionsParams,
+    SpendRequestRecurringParams,
     TotalParams,
     UpdateSpendRequestParams,
 )
@@ -70,6 +71,7 @@ class AsyncSpendRequestsResource:
         test: bool | None = None,
         approval_details: ApprovalDetailParams | None = None,
         metadata: Mapping[str, str] | None = None,
+        recurring: SpendRequestRecurringParams | None = None,
     ) -> SpendRequest:
         """Create a spend request.
 
@@ -95,6 +97,7 @@ class AsyncSpendRequestsResource:
             "test": test,
             "approval_details": approval_details,
             "metadata": metadata,
+            "recurring": recurring,
         }
         return await self._transport.request(op.spend_create(params))
 

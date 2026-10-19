@@ -7,6 +7,7 @@ import type {
   InsightsPage,
   LineItem,
   PaymentMethod,
+  RecurringInterval,
   RequestApprovalResponse,
   ShippingAddressRecord,
   SourcesPage,
@@ -62,6 +63,12 @@ export interface IIdentityCredentialsResource {
   ): Promise<IssueIdentityCredentialResponse>;
 }
 
+export interface SpendRequestRecurringParams {
+  interval: RecurringInterval;
+  /** Positive number of intervals per period. Defaults to 1 on the server. */
+  interval_count?: number;
+}
+
 export interface CreateSpendRequestParams {
   idempotency_key?: string;
   /**
@@ -89,6 +96,7 @@ export interface CreateSpendRequestParams {
   test?: boolean;
   approval_details?: ApprovalDetail;
   metadata?: Record<string, string>;
+  recurring?: SpendRequestRecurringParams;
 }
 
 export interface UpdateSpendRequestParams {
