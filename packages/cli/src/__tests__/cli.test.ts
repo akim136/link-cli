@@ -1552,6 +1552,49 @@ describe('production mode', { timeout: CLI_TIMEOUT_MS + 5_000 }, () => {
     });
   });
 
+  describe('test-helpers spend-request approve', () => {
+    it('requires LINK_TEST_HELPERS', async () => {
+      const result = await runProdCliWithEnv(
+        { LINK_TEST_HELPERS: '' },
+        'test-helpers',
+        'spend-request',
+        'approve',
+        'lsrq_prod_001',
+        '--format',
+        'json',
+      );
+
+      expect(result.exitCode).toBe(1);
+      expect(requests).toHaveLength(0);
+    });
+
+    it('approves the test request by ID and returns its ID and status', async () => {
+      const approved = { id: 'lsrq_prod_001', status: 'approved' };
+      setNextResponse(200, approved);
+
+      const result = await runProdCliWithEnv(
+        { LINK_TEST_HELPERS: '1' },
+        'test-helpers',
+        'spend-request',
+        'approve',
+        'lsrq_prod_001',
+        '--format',
+        'json',
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(parseJson(result.stdout)).toEqual(approved);
+      expect(lastRequest.method).toBe('POST');
+      expect(lastRequest.url).toBe(
+        '/test_helpers/spend_requests/lsrq_prod_001/approve',
+      );
+      expect(lastRequest.headers.authorization).toBe(
+        'Bearer prod_test_access_token',
+      );
+      expect(lastRequest.body).toBe('');
+    });
+  });
+
   describe('spend-request cancel', () => {
     it('sends POST to /spend_requests/:id/cancel with auth header and no body', async () => {
       setNextResponse(200, { ...BASE_REQUEST, status: 'canceled' });
