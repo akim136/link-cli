@@ -35,9 +35,12 @@ it('keeps the manual login URL and polling available when browser launch fails',
   const { lastFrame, stdin, unmount } = render(
     <Login authResource={authResource} onComplete={onComplete} />,
   );
+  const setRawMode = vi.spyOn(stdin, 'setRawMode');
 
   try {
     await vi.waitFor(() => expect(lastFrame()).toContain(verificationUrl));
+    // Ink installs its input listener after rendering the manual URL.
+    await vi.waitFor(() => expect(setRawMode).toHaveBeenCalledWith(true));
     stdin.write('\r');
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce());
     expect(() =>
